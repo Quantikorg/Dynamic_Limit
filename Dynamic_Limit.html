@@ -57,6 +57,10 @@
       Steps (N)
       <input id="steps" value="4">
     </div>
+    <div>
+      Max Limit (%)
+      <input id="maxLimit" value="25">
+    </div>
   </div>
 </div>
 
@@ -93,7 +97,7 @@ function update(){
   const Cl = parseFloat(ClInput.value) || 1;
   const steps = parseInt(stepsInput.value) || 1;
 
-  const maxLimit = 0.25;
+  const maxLimit = parseFloat(maxLimitInput.value)/100 || 0.25;
   const multiple = idx > 0 ? eq/idx : 0;
 
   multipleDiv.innerText = multiple.toFixed(2) + 'x';
@@ -112,8 +116,12 @@ function update(){
   }
 
   const current = dynamicLimit(multiple,maxLimit,I,Cs,Cl);
+  const steppedCurrent = stepLimit(current,maxLimit,steps);
 
-  static.innerText = (maxLimit*100).toFixed(2)+'%';
+  // static = intersection with STEP (red line)
+  static.innerText = (steppedCurrent*100).toFixed(2)+'%';
+
+  // dynamic = smooth curve value
   dynamic.innerText = (current*100).toFixed(2)+'%';
 
   if(chart) chart.destroy();
@@ -197,12 +205,13 @@ const IInput = document.getElementById('I');
 const CsInput = document.getElementById('Cs');
 const ClInput = document.getElementById('Cl');
 const stepsInput = document.getElementById('steps');
+const maxLimitInput = document.getElementById('maxLimit');
 const multipleDiv = document.getElementById('multiple');
 const mVal = document.getElementById('mVal');
 const static = document.getElementById('static');
 const dynamic = document.getElementById('dynamic');
 
-[eqInput,idxInput,IInput,CsInput,ClInput,stepsInput].forEach(i=>i.addEventListener('input',update));
+[eqInput,idxInput,IInput,CsInput,ClInput,stepsInput,maxLimitInput].forEach(i=>i.addEventListener('input',update));
 
 update();
 </script>
@@ -211,8 +220,7 @@ update();
   <code>
     L(x) = Lmax · [ (π/2 + atan((x/I)^(-Cs) - (x/I)^Cl)) / (π/2 + atan((1/I)^(-Cs) - (1/I)^Cl)) ]
   </code>
-  </script>
-  <footer style="margin:40px auto 20px;max-width:920px;text-align:center;font-size:12px;color:#777;font-style:italic;">
+    <footer style="margin:40px auto 20px;max-width:920px;text-align:center;font-size:12px;color:#777;font-style:italic;">
     © Quantik.org. All rights reserved. This model, including its code and associated intellectual property, is the exclusive property of Quantik.org and may not be copied, distributed, or replicated without prior written consent. Use of this calculator implies acceptance of these terms.
   </footer>
 </body>
