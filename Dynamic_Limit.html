@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dynamic Limit Pricer</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    h2 { margin-bottom: 20px; }
+    .grid { display: grid; gap: 15px; }
+    .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    input {
+      width:100%; padding:3px 18px 3px 3px; box-sizing:border-box;
+      background:#fff3b0; color:red; border:1px solid #aaa; text-align:right;
+    }
+    .card { border:1px solid #ddd; padding:15px; border-radius:8px; }
+    canvas { height: 400px !important; }
+  </style>
+</head>
+<body>
+
+<h2>Dynamically Adjusting Risk Limits to a Reference Index</h2>
+
+<div class="card grid">
+  <div class="row">
+    <div>
+      Equity Vol (%)
+      <input id="eq" value="45">
+    </div>
+    <div>
+      Index Vol (%)
+      <input id="idx" value="7">
+    </div>
+    <div>
+      Multiple
+      <div id="multiple"></div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      Inflection (I)
+      <input id="I" value="1.5">
+    </div>
+    <div>
+      Short Curvature (Cs)
+      <input id="Cs" value="2.5">
+    </div>
+    <div>
+      Long Curvature (Cl)
+      <input id="Cl" value="0.2">
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      Steps (N)
+      <input id="steps" value="4">
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div>Multiple: <span id="mVal"></span></div>
+  <div>Static Limit: <span id="static"></span></div>
+  <div>Dynamic Limit: <span id="dynamic"></span></div>
+</div>
+
+<div class="card">
+  <canvas id="chart"></canvas>
+</div>
+
+<script>
+function dynamicLimit(x, maxLimit, I, Cs, Cl) {
+  const num = (Math.PI/2) + Math.atan(Math.pow(x/I, -Cs) - Math.pow(x/I, Cl));
+  const den = (Math.PI/2) + Math.atan(Math.pow(1/I, -Cs) - Math.pow(1/I, Cl));
+  return maxLimit * (num/den);
+}
+
+function stepLimit(limit, maxLimit, steps) {
+  const step = maxLimit/steps;
+  return Math.ceil(limit/step)*step;
+}
+
+const ctx = document.getElementById('chart');
+let chart;
+
+function update(){
+  const eq = parseFloat(eqInput.value) || 0;
+  const idx = parseFloat(idxInput.value) || 1;
+  const I = parseFloat(IInput.value) || 1;
+  const Cs = parseFloat(CsInput.value) || 1;
+  const Cl = parseFloat(ClInput.value) || 1;
+  const steps = parseInt(stepsInput.value) || 1;
+
+  const maxLimit = 0.25;
+  const multiple = idx > 0 ? eq/idx : 0;
+
+  multipleDiv.innerText = multiple.toFixed(2) + 'x';
+  mVal.innerText = multiple.toFixed(2);
+
+  const xs = [];
+  const ys = [];
+  const ysStep = [];
+
+  for(let i=0;i<50;i++){
+    const m = i*0.5;
+    const l = dynamicLimit(m,maxLimit,I,Cs,Cl);
+    xs.push(m);
+    ys.push(l);
+    ysStep.push(stepLimit(l,maxLimit,steps));
+  }
+
+  const current = dynamicLimit(multiple,maxLimit,I,Cs,Cl);
+
+  static.innerText = (maxLimit*100).toFixed(2)+'%';
+  dynamic.innerText = (current*100).toFixed(2)+'%';
+
+  if(chart) chart.destroy();
+
+  // vertical line plugin
+  const verticalLinePlugin = {
+    id: 'verticalLine',
+    afterDraw(chart) {
+      const {ctx, chartArea, scales} = chart;
+      const xScale = scales.x;
+
+      const xPixel = xScale.getPixelForValue(multiple);
+
+      if (!xPixel) return;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(xPixel, chartArea.top);
+      ctx.lineTo(xPixel, chartArea.bottom);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#16a34a';
+      ctx.setLineDash([5,5]);
+      ctx.stroke();
+
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#16a34a';
+      ctx.font = '12px Arial';
+      ctx.fillText(multiple.toFixed(2) + 'x', xPixel + 5, chartArea.top + 15);
+
+      ctx.restore();
+    }
+  };
+
+  chart = new Chart(ctx,{
+    type:'line',
+    data:{
+      datasets:[
+        {
+          label:'Dynamic',
+          data: xs.map((x,i)=>({x:x,y:ys[i]})),
+          borderWidth:3,
+          borderColor:'#1e3a8a',
+          tension:0.3,
+          pointRadius:0,
+          parsing:false
+        },
+        {
+          label:'Step',
+          data: xs.map((x,i)=>({x:x,y:ysStep[i]})),
+          borderColor:'red',
+          borderWidth:2,
+          borderDash:[6,6],
+          pointRadius:0,
+          parsing:false
+        }
+      ]
+    },
+    options:{
+      responsive:true,
+      plugins:{ legend:{ position:'top' } },
+      scales:{
+        x:{
+          type:'linear',
+          title:{display:true,text:'Multiple'},
+          min:0,
+          max: Math.max(...xs, multiple)
+        },
+        y:{
+          title:{display:true,text:'Limit (%)'},
+          ticks:{ callback:(v)=> (v*100).toFixed(0)+'%' }
+        }
+      }
+    },
+    plugins:[verticalLinePlugin]
+  });
+}
+
+const eqInput = document.getElementById('eq');
+const idxInput = document.getElementById('idx');
+const IInput = document.getElementById('I');
+const CsInput = document.getElementById('Cs');
+const ClInput = document.getElementById('Cl');
+const stepsInput = document.getElementById('steps');
+const multipleDiv = document.getElementById('multiple');
+const mVal = document.getElementById('mVal');
+const static = document.getElementById('static');
+const dynamic = document.getElementById('dynamic');
+
+[eqInput,idxInput,IInput,CsInput,ClInput,stepsInput].forEach(i=>i.addEventListener('input',update));
+
+update();
+</script>
+
+</body>
+</html>
